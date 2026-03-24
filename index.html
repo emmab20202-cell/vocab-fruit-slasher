@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>词汇水果消消乐 - 终极优化版</title>
+    <style>
+        body { margin: 0; padding: 0; background-color: #2c3e50; overflow: hidden; color: white; font-family: 'PingFang SC', sans-serif; user-select: none; touch-action: none; }
+        #gameCanvas { display: block; background: radial-gradient(circle, #34495e 0%, #2c3e50 100%); cursor: pointer; }
+        #ui-layer { position: absolute; top: 0; left: 0; width: 100%; padding: 20px; box-sizing: border-box; pointer-events: none; display: flex; justify-content: space-between; z-index: 10; }
+        #target-box { background: rgba(0,0,0,0.8); padding: 15px 25px; border-radius: 12px; border-left: 10px solid #ff9f43; min-width: 280px; }
+        #target-word { color: #ff9f43; font-size: 56px; font-weight: bold; display: block; text-shadow: 2px 2px 5px rgba(0,0,0,0.5); }
+        #info-box { text-align: right; background: rgba(0,0,0,0.6); padding: 15px 25px; border-radius: 12px; font-size: 24px; }
+        .overlay { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; color: #333; padding: 40px; border-radius: 20px; text-align: center; box-shadow: 0 20px 50px rgba(0,0,0,0.5); z-index: 100; width: 85%; max-width: 350px; }
+        button { background: #2ed573; color: white; border: none; padding: 18px 45px; border-radius: 12px; cursor: pointer; font-size: 24px; font-weight: bold; margin-top: 20px; box-shadow: 0 6px 0 #218838; -webkit-tap-highlight-color: transparent; }
+        button:active { transform: translateY(3px); box-shadow: none; }
+    </style>
+</head>
+<body>
+
+    <div id="start-screen" class="overlay">
+        <h1>词汇水果派对</h1>
+        <p>听音识词，点击水果！<br><b>提示：若无声音请点击页面空白处后再点击开始</b></p>
+        <button id="start-btn">开始游戏</button>
+    </div>
+
+    <div id="game-over" class="overlay" style="display:none">
+        <h1>Time's Up! 时间到!</h1>
+        <p>Final Score 最终得分: <span id="final-score">0</span></p>
+        <button onclick="location.reload()">Play Again 再挑战一次</button>
+    </div>
+
+    <div id="ui-layer">
+        <div id="target-box">
+            <span style="font-size: 18px; opacity: 0.9;">当前目标:</span>
+            <span id="target-word">加载中...</span>
+        </div>
+        <div id="info-box">
+            <div>倒计时: <span id="timer">60</span>s</div>
+            <div style="color: #2ed573;">得分: <span id="score">0</span></div>
+        </div>
+    </div>
+
+    <canvas id="gameCanvas"></canvas>
+
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const targetWordEl = document.getElementById('target-word');
+const timerEl = document.getElementById('timer');
+
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
+
+let score = 0;
+let timeLeft = 60;
+let gameActive = false;
+let vocabulary = ["square", "triangle", "rectangle", "circle", "their", "favourite", "present", "plane", "robot", "bike", "balloon", "radio", "helicopter", "milk", "coffee", "whose", "kite", "mouse", "keyboard", "blue"];
+let currentTargetWord = "";
+let fruits = [];
+let particles = [];
+let targetChangeTimer;
+
+// --- 语音核心：强制激活与错误修复 ---
+function speak(text) {
+    if (!gameActive || !text) return;
+    window.speechSynthesis.cancel();
+
+    setTimeout(() => {
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = 'en-US';
+        utterance.rate = 0.8;
+        utterance.volume = 1.0;
+        utterance.onerror = (e) => {
+            if(e.error === 'interrupted') window.speechSynthesis.resume();
+        };
+        window.speechSynthesis.speak(utterance);
+    }, 50);
+}
+
+class Particle {
+    constructor(x, y, color) {
+        this.x = x; this.y = y; this.color = color;
+        this.size = Math.random() * 8 + 4;
+        this.speedX = (Math.random() - 0.5) * 20;
+        this.speedY = (Math.random() - 0.5) * 20;
+        this.gravity = 0.25; this.life = 1.0; this.decay = Math.random() * 0.03 + 0.02;
+    }
+    update() { this.x += this.speedX; this.y += this.speedY; this.speedY += this.gravity; this.life -= this.decay; }
+    draw() { ctx.fillStyle = this.color; ctx.globalAlpha = this.life; ctx.beginPath(); ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = 1.0; }
+}
+
+class Fruit {
+    constructor() { this.init(); }
+    init() {
+        let newWord;
+        do {
+            newWord = vocabulary[Math.floor(Math.random() * vocabulary.length)].trim().toLowerCase();
+        } while (fruits.some(f => f.word === newWord));
+
+        this.word = newWord;
+        this.radius = 80; 
+        this.x = Math.random() * (canvas.width - 250) + 125;
+        this.y = canvas.height + 150;
+        this.speedX = (Math.random() - 0.5) * 2;
+        this.speedY = -(Math.random() * 5 + 10); // 确保飞升高度到80%
+        this.gravity = 0.15; 
+        this.color = `hsl(${Math.random() * 360}, 85%, 60%)`;
+    }
+    update() {
+        if (!gameActive) return;
+        this.speedY += this.gravity;
+        this.x += this.speedX;
+        this.y += this.speedY;
+        if (this.y > canvas.height + 200) this.init();
+    }
+    draw() {
+        ctx.save();
+        ctx.translate(this.x, this.y);
+        ctx.beginPath(); ctx.arc(0, 0, this.radius, 0, Math.PI * 2);
+        ctx.fillStyle = this.color; ctx.fill();
+        ctx.lineWidth = 6; ctx.strokeStyle = 'white'; ctx.stroke();
+        ctx.fillStyle = "white"; 
+        ctx.font = "bold 34px Arial"; 
+        ctx.textAlign = "center";
+        ctx.fillText(this.word, 0, 12);
+        ctx.restore();
+    }
+}
+
+function pickNewTarget() {
+    if (fruits.length === 0 || !gameActive) return;
+    const randomIndex = Math.floor(Math.random() * fruits.length);
+    currentTargetWord = fruits[randomIndex].word;
+    targetWordEl.textContent = currentTargetWord;
+    speak(currentTargetWord);
+    
+    clearTimeout(targetChangeTimer);
+    targetChangeTimer = setTimeout(pickNewTarget, 6000);
+}
+
+// 输入处理逻辑 (兼容手机和电脑)
+const handleInput = (e) => {
+    if (!gameActive) return;
+    let clientX, clientY;
+    if (e.touches) {
+        clientX = e.touches[0].clientX;
+        clientY = e.touches[0].clientY;
+    } else {
+        clientX = e.clientX;
+        clientY = e.clientY;
+    }
+
+    const rect = canvas.getBoundingClientRect();
+    const mouseX = clientX - rect.left;
+    const mouseY = clientY - rect.top;
+
+    fruits.forEach(fruit => {
+        const dx = mouseX - fruit.x;
+        const dy = mouseY - fruit.y;
+        if (Math.sqrt(dx*dx + dy*dy) < fruit.radius) {
+            if (fruit.word === currentTargetWord) {
+                score++;
+                document.getElementById('score').textContent = score;
+                for (let i = 0; i < 25; i++) particles.push(new Particle(fruit.x, fruit.y, fruit.color));
+                fruit.init(); 
+                pickNewTarget(); 
+            }
+        }
+    });
+};
+
+function startGame() {
+    window.speechSynthesis.cancel();
+    const unlock = new SpeechSynthesisUtterance("Welcome");
+    unlock.volume = 0; 
+    window.speechSynthesis.speak(unlock);
+
+    document.getElementById('start-screen').style.display = 'none';
+    gameActive = true;
+    
+    for (let i = 0; i < 4; i++) {
+        setTimeout(() => {
+            if (gameActive) {
+                fruits.push(new Fruit());
+                if (fruits.length === 1) pickNewTarget(); 
+            }
+        }, i * 800);
+    }
+
+    const gameCountdown = setInterval(() => {
+        timeLeft--;
+        timerEl.textContent = timeLeft;
+        if (timeLeft <= 0) { clearInterval(gameCountdown); endGame(); }
+    }, 1000);
+
+    const voiceLoop = setInterval(() => {
+        if (gameActive) speak(currentTargetWord);
+        else clearInterval(voiceLoop);
+    }, 3000);
+
+    animate();
+}
+
+function endGame() {
+    gameActive = false;
+    clearTimeout(targetChangeTimer);
+    window.speechSynthesis.cancel();
+    document.getElementById('game-over').style.display = 'block';
+    document.getElementById('final-score').textContent = score;
+}
+
+document.getElementById('start-btn').onclick = startGame;
+canvas.addEventListener('mousedown', handleInput);
+canvas.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    handleInput(e);
+}, { passive: false });
+
+function animate() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    if (gameActive && fruits.length > 0) {
+        if (!fruits.some(f => f.word === currentTargetWord)) pickNewTarget();
+    }
+    fruits.forEach(f => { f.update(); f.draw(); });
+    for (let i = particles.length - 1; i >= 0; i--) {
+        particles[i].update(); particles[i].draw();
+        if (particles[i].life <= 0) particles.splice(i, 1);
+    }
+    requestAnimationFrame(animate);
+}
+
+window.addEventListener('resize', () => {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+});
+</script>
+</body>
+</html>
