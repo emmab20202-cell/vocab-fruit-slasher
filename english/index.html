@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>词汇水果派对 - 美式加强版</title>
+    <style>
+        body { margin: 0; padding: 0; background-color: #2c3e50; overflow: hidden; color: white; font-family: 'PingFang SC', sans-serif; user-select: none; touch-action: none; -webkit-tap-highlight-color: transparent; }
+        #gameCanvas { display: block; background: radial-gradient(circle, #34495e 0%, #2c3e50 100%); cursor: pointer; }
+        #main-container { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; flex-direction: column; z-index: 10; pointer-events: none; }
+        #header { width: 100%; padding: 10px; box-sizing: border-box; display: flex; justify-content: space-between; align-items: flex-start; }
+        #target-box { background: rgba(0,0,0,0.8); padding: 10px 15px; border-radius: 10px; border-left: 6px solid #ff9f43; min-width: 140px; max-width: 50%; pointer-events: auto; position: relative; }
+        #target-word { color: #ff9f43; font-size: 32px; font-weight: bold; display: block; text-shadow: 2px 2px 5px rgba(0,0,0,0.5); line-height: 1.2; }
+        #target-cn { color: #bdc3c7; font-size: 16px; display: block; margin-top: 2px; }
+        #combo-toast { position: absolute; bottom: -45px; left: 0; font-size: 24px; font-weight: bold; color: #f1c40f; display: none; white-space: nowrap; animation: pop 0.5s ease-out; text-shadow: 2px 2px 4px rgba(0,0,0,0.8); }
+        @keyframes pop { 0% { transform: scale(0.5); opacity: 0; } 50% { transform: scale(1.2); } 100% { transform: scale(1); opacity: 1; } }
+        #error-tip { position: absolute; bottom: -25px; left: 0; font-size: 12px; color: #ff4757; font-weight: bold; width: 200%; display: none; }
+        #sidebar { position: absolute; right: 10px; top: 10px; display: flex; flex-direction: column; gap: 8px; text-align: right; pointer-events: auto; }
+        #info-box { background: rgba(0,0,0,0.6); padding: 8px 12px; border-radius: 10px; font-size: 14px; min-width: 70px; }
+        .sidebar-btn { background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.4); color: white; border-radius: 6px; padding: 6px 10px; font-size: 12px; cursor: pointer; }
+        .sidebar-btn.paused { background: #f1c40f; color: #333; }
+        @media (min-width: 768px) { #target-word { font-size: 48px; } #target-cn { font-size: 22px; } #info-box { font-size: 20px; } .sidebar-btn { font-size: 16px; padding: 10px 15px; } }
+        .full-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 100; display: flex; flex-direction: column; align-items: center; justify-content: center; pointer-events: auto; }
+        .overlay-card { background: white; color: #333; padding: 25px; border-radius: 20px; text-align: center; width: 85%; max-width: 380px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+        .game-btn { background: #2ed573; color: white; border: none; padding: 12px 20px; border-radius: 10px; cursor: pointer; font-size: 18px; font-weight: bold; margin: 8px; width: 85%; display: inline-block; transition: all 0.2s; text-decoration: none; }
+        .game-btn:active { transform: translateY(2px); opacity: 0.9; }
+        #review-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); display: none; z-index: 200; pointer-events: auto; }
+        #review-card { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; color: #333; padding: 25px; border-radius: 20px; text-align: center; border: 6px solid #ff9f43; width: 80%; max-width: 400px; }
+    </style>
+</head>
+<body>
+
+    <div id="start-screen" class="full-overlay">
+        <div class="overlay-card">
+            <h2 style="margin-top:0; color:#2c3e50;">词汇水果派对</h2>
+            <div style="display: flex; flex-direction: column; align-items: center; width: 100%;">
+                <button class="game-btn" onclick="startGame('free')">🎮 畅玩模式</button>
+                <button class="game-btn" style="background:#ff9f43;" onclick="startGame('review')">📚 复习模式</button>
+                <button class="game-btn" style="background:#3498db;" onclick="showRules()">📜 游戏规则</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="rule-screen" class="full-overlay" style="display:none;">
+        <div class="overlay-card">
+            <h3 style="margin-top:0;">游戏规则</h3>
+            <div style="text-align: left; font-size: 14px; line-height: 1.6; color: #444; margin: 15px 0;">
+                1. 点击提示的目标单词水果。<br>
+                2. <b>连击奖励：</b>击中加分递增（最高4分）。<br>
+                3. <b>计分处罚：</b>连错3次将暂停计分。<br>
+                4. <b>美式发音：</b>系统将优先使用美式英语朗读。
+            </div>
+            <button class="game-btn" style="background:#e74c3c;" onclick="hideRules()">退出</button>
+        </div>
+    </div>
+
+    <div id="review-overlay">
+        <div id="review-card">
+            <span id="review-word-en" style="font-size:40px; font-weight:bold; color:#e67e22; display:block;">word</span>
+            <span id="review-word-cn" style="font-size:24px; color:#7f8c8d; border-top:1px solid #eee; margin-top:10px; padding-top:10px; display:block;">意思</span>
+            <div style="margin:15px 0; font-size:14px; color: #95a5a6;">🇺🇸 美式发音跟读中...</div>
+            <button class="game-btn" style="background:#34495e; width: 60%; font-size: 14px;" onclick="closeReviewManually()">继续游戏</button>
+        </div>
+    </div>
+
+    <div id="game-over" class="full-overlay" style="display:none">
+        <div class="overlay-card">
+            <h2 style="color:#e74c3c;">游戏结束</h2>
+            <div style="font-size:18px; margin: 15px 0;">
+                <p>本次得分: <span id="final-score" style="font-size:32px; color:#2ed573; font-weight:bold;">0</span></p>
+                <p style="color:#3498db;">最高记录: <span id="high-score">0</span></p>
+            </div>
+            <button class="game-btn" onclick="location.reload()">回到主页</button>
+        </div>
+    </div>
+
+    <div id="main-container">
+        <div id="header">
+            <div id="target-box">
+                <span style="font-size: 11px; opacity: 0.7;">TARGET WORD (US)</span>
+                <span id="target-word">...</span>
+                <span id="target-cn">加载中...</span>
+                <div id="combo-toast">棒！2连击！</div>
+                <div id="error-tip">连续2次点错，即将暂停计分</div>
+            </div>
+        </div>
+        <div id="sidebar">
+            <div id="info-box">
+                <div>⏱️ <span id="timer">60</span>s</div>
+                <div style="color: #2ed573;">🏆 <span id="score">0</span></div>
+            </div>
+            <button id="pause-btn" class="sidebar-btn" onclick="togglePause()">暂停</button>
+            <button class="sidebar-btn" style="background:#3498db;" onclick="showRules()">规则</button>
+            <button class="sidebar-btn" style="background:#e74c3c;" onclick="location.reload()">退出</button>
+        </div>
+    </div>
+
+    <canvas id="gameCanvas"></canvas>
+
+<script>
+// 此处保留您提供的完整 vocabularyData 数组
+const vocabularyData = [{en: "square", cn: "正方形"}, {en: "triangle", cn: "三角形"}, {en: "rectangle", cn: "长方形"}, {en: "circle", cn: "圆形"}, {en: "their", cn: "他们的"}, {en: "favourite", cn: "最喜爱的"}, {en: "present", cn: "礼物"}, {en: "plane", cn: "飞机"}, {en: "robot", cn: "机器人"}, {en: "bike", cn: "自行车"}, {en: "balloon", cn: "气球"}, {en: "radio", cn: "收音机"}, {en: "helicopter", cn: "直升机"}, {en: "milk", cn: "牛奶"}, {en: "coffee", cn: "咖啡"}, {en: "whose", cn: "谁的"}, {en: "kite", cn: "风筝"}, {en: "mouse", cn: "老鼠/鼠标"}, {en: "keyboard", cn: "键盘"}, {en: "purple", cn: "紫色"}, {en: "yellow", cn: "黄色"}, {en: "swing", cn: "秋千"}, {en: "seesaw", cn: "跷跷板"}, {en: "slide", cn: "滑梯"}, {en: "brown", cn: "棕色"}, {en: "orange", cn: "橙色"}, {en: "grey", cn: "灰色"}, {en: "elephant", cn: "大象"}, {en: "monkey", cn: "猴子"}, {en: "snake", cn: "蛇"}, {en: "zebra", cn: "斑马"}, {en: "lion", cn: "狮子"}, {en: "frog", cn: "青蛙"}, {en: "giraffe", cn: "长颈鹿"}, {en: "tiger", cn: "老虎"}, {en: "rat", cn: "老鼠"}, {en: "fish", cn: "鱼"}, {en: "tomato", cn: "西红柿"}, {en: "potato", cn: "土豆"}, {en: "meat", cn: "肉"}, {en: "bread", cn: "面包"}, {en: "rice", cn: "米饭"}, {en: "carrot", cn: "胡萝卜"}, {en: "banana", cn: "香蕉"}, {en: "juice", cn: "果汁"}, {en: "yogurt", cn: "酸奶"}, {en: "cheese", cn: "奶酪"}, {en: "curly hair", cn: "卷发"}, {en: "bookshelf", cn: "书架"}, {en: "living room", cn: "客厅"}, {en: "bedroom", cn: "卧室"}, {en: "kitchen", cn: "厨房"}, {en: "toilet", cn: "厕所"}, {en: "upstairs", cn: "楼上"}, {en: "downstairs", cn: "楼下"}, {en: "hall", cn: "过道"}, {en: "puzzle", cn: "拼图"}, {en: "pillow", cn: "枕头"}, {en: "blanket", cn: "毯子"}, {en: "sock", cn: "袜子"}, {en: "shoe", cn: "鞋子"}, {en: "rug", cn: "小地毯"}, {en: "carpet", cn: "地毯"}, {en: "cupboard", cn: "橱柜"}, {en: "swim", cn: "游泳"}, {en: "climb", cn: "爬"}, {en: "jump", cn: "跳"}, {en: "beach", cn: "沙滩"}, {en: "football", cn: "足球"}, {en: "sandcastle", cn: "沙堡"}, {en: "boat", cn: "船"}, {en: "biscuit", cn: "饼干"}, {en: "ink", cn: "墨水"}, {en: "eyes", cn: "眼睛"}, {en: "nose", cn: "鼻子"}, {en: "face", cn: "脸"}, {en: "ear", cn: "耳朵"}, {en: "hair", cn: "头发"}, {en: "dress", cn: "连衣裙"}, {en: "trousers", cn: "裤子"}, {en: "hat", cn: "帽子"}, {en: "coat", cn: "外套"}, {en: "drink", cn: "饮料"}, {en: "leg", cn: "腿"}, {en: "arm", cn: "手臂"}, {en: "foot", cn: "脚"}, {en: "look", cn: "看"}, {en: "train", cn: "火车"}, {en: "listen", cn: "听"}, {en: "numbers", cn: "数字"}, {en: "colours", cn: "颜色"}, {en: "hello", cn: "你好"}, {en: "bag", cn: "书包"}, {en: "book", cn: "书"}, {en: "pen", cn: "钢笔"}, {en: "pencil", cn: "铅笔"}, {en: "pencil case", cn: "笔袋"}, {en: "rubber", cn: "橡皮"}, {en: "teacher", cn: "老师"}, {en: "board", cn: "板"}, {en: "bookcase", cn: "书架"}, {en: "door", cn: "门"}, {en: "paper", cn: "纸"}, {en: "wall", cn: "墙"}, {en: "window", cn: "窗户"}, {en: "family", cn: "家庭"}, {en: "father", cn: "父亲"}, {en: "mother", cn: "母亲"}, {en: "grandfather", cn: "爷爷"}, {en: "grandmother", cn: "奶奶"}, {en: "sister", cn: "姐妹"}, {en: "body", cn: "身体"}, {en: "tail", cn: "尾巴"}, {en: "chicken", cn: "鸡"}, {en: "donkey", cn: "驴"}, {en: "duck", cn: "鸭"}, {en: "goat", cn: "山羊"}, {en: "horse", cn: "马"}, {en: "angry", cn: "生气"}, {en: "beautiful", cn: "漂亮"}, {en: "funny", cn: "有趣"}, {en: "happy", cn: "快乐"}, {en: "sad", cn: "伤心"}, {en: "ugly", cn: "丑陋"}, {en: "chocolate", cn: "巧克力"}, {en: "ice cream", cn: "冰淇淋"}, {en: "teddy bear", cn: "泰迪熊"}, {en: "zoo", cn: "动物园"}, {en: "bus", cn: "公交"}, {en: "truck", cn: "卡车"}, {en: "motorbike", cn: "摩托车"}, {en: "garden", cn: "花园"}, {en: "flower", cn: "花"}, {en: "tree", cn: "树"}, {en: "hippo", cn: "河马"}, {en: "lizard", cn: "蜥蜴"}, {en: "polar bear", cn: "北极熊"}, {en: "music", cn: "音乐"}, {en: "play basketball", cn: "打篮球"}, {en: "play football", cn: "踢足球"}, {en: "play tennis", cn: "打网球"}, {en: "play the guitar", cn: "弹吉他"}, {en: "play the piano", cn: "弹钢琴"}, {en: "ride a bike", cn: "骑车"}, {en: "sport", cn: "运动"}, {en: "watch television", cn: "看电视"}, {en: "baseball", cn: "棒球"}, {en: "badminton", cn: "羽毛球"}, {en: "hockey", cn: "曲棍球"}, {en: "running", cn: "跑步"}, {en: "throwing", cn: "投掷"}, {en: "kicking", cn: "踢"}, {en: "skateboarding", cn: "滑板"}, {en: "bathroom", cn: "浴室"}, {en: "bathtub", cn: "浴缸"}, {en: "bed", cn: "床"}, {en: "dining room", cn: "餐厅"}, {en: "mirror", cn: "镜子"}, {en: "armchair", cn: "扶手椅"}, {en: "clock", cn: "时钟"}, {en: "floor", cn: "地板"}, {en: "hallway", cn: "走廊"}, {en: "lamp", cn: "台灯"}, {en: "painting", cn: "画"}, {en: "phone", cn: "电话"}, {en: "sofa", cn: "沙发"}, {en: "boots", cn: "靴子"}, {en: "cap", cn: "帽子"}, {en: "glasses", cn: "眼镜"}, {en: "jacket", cn: "夹克"}, {en: "jeans", cn: "牛仔裤"}, {en: "shoes", cn: "鞋子"}, {en: "shirt", cn: "衬衫"}, {en: "skirt", cn: "裙子"}, {en: "shorts", cn: "短裤"}, {en: "T-shirt", cn: "T恤"}, {en: "sunglasses", cn: "太阳镜"}, {en: "camera", cn: "相机"}, {en: "jellyfish", cn: "水母"}, {en: "sand", cn: "沙子"}, {en: "sea", cn: "大海"}, {en: "shell", cn: "贝壳"}, {en: "sun", cn: "太阳"}];
+
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const targetWordEl = document.getElementById('target-word');
+const targetCnEl = document.getElementById('target-cn');
+const timerEl = document.getElementById('timer');
+const scoreEl = document.getElementById('score');
+const comboToastEl = document.getElementById('combo-toast');
+const errorTipEl = document.getElementById('error-tip');
+
+let score = 0, timeLeft = 60, gameActive = false, isPaused = false, isManuallyPaused = false;
+let comboCount = 0, errorStreak = 0, scoreSuspended = false;
+let currentTarget = null, fruits = [], particles = [], gameMode = 'free';
+let gameCountdownInterval, voiceLoopInterval, reviewTimeout = null;
+
+function resizeCanvas() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
+window.addEventListener('resize', resizeCanvas);
+resizeCanvas();
+
+// --- 改进：美式发音配置 ---
+function speak(text, callback) {
+    if (!gameActive || isManuallyPaused) return;
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(text);
+    
+    // 强制查找美式英语语音库
+    const voices = window.speechSynthesis.getVoices();
+    const usVoice = voices.find(v => v.lang.includes('en-US') && v.name.includes('Google')) || 
+                    voices.find(v => v.lang.includes('en-US')) || 
+                    voices[0];
+    
+    if(usVoice) utterance.voice = usVoice;
+    utterance.lang = 'en-US';
+    utterance.rate = 0.85;
+    if(callback) utterance.onend = callback;
+    window.speechSynthesis.speak(utterance);
+}
+// 浏览器语音库异步加载，提前触发一次
+window.speechSynthesis.getVoices();
+
+class Fruit {
+    constructor() { this.init(); }
+    init() {
+        let newData;
+        do { newData = vocabularyData[Math.floor(Math.random() * vocabularyData.length)]; } 
+        while (fruits.some(f => f.wordData.en === newData.en));
+        this.wordData = newData;
+        this.radius = Math.min(canvas.width, canvas.height) * 0.12;
+        if(this.radius > 70) this.radius = 70;
+        this.x = Math.random() * (canvas.width - this.radius * 2) + this.radius;
+        this.y = canvas.height + 150;
+        this.speedX = (Math.random() - 0.5) * 2;
+        this.speedY = -(Math.random() * 4 + 11);
+        this.gravity = 0.15; this.color = `hsl(${Math.random() * 360}, 80%, 60%)`;
+    }
+    update() {
+        if (!gameActive || isPaused || isManuallyPaused) return;
+        this.speedY += this.gravity; this.x += this.speedX; this.y += this.speedY;
+        if (this.y > canvas.height + 150) {
+            if(this.wordData.en === currentTarget?.en) comboCount = 0; 
+            this.init();
+        }
+    }
+    // --- 改进：长单词自动分行显示 ---
+    draw() {
+        ctx.save(); ctx.translate(this.x, this.y);
+        ctx.beginPath(); ctx.arc(0, 0, this.radius, 0, Math.PI * 2);
+        ctx.fillStyle = this.color; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = 'white'; ctx.stroke();
+        
+        ctx.fillStyle = "white";
+        ctx.textAlign = "center";
+        
+        const text = this.wordData.en.toLowerCase();
+        const words = text.split(' '); // 根据空格切分单词
+        
+        if (words.length > 1) {
+            // 如果单词数多于1个（如 curly hair），分行显示
+            let fontSize = this.radius * 0.32;
+            ctx.font = `bold ${fontSize}px Arial`;
+            // 计算两行文本的垂直居中偏移
+            words.forEach((w, index) => {
+                const yOffset = (index - (words.length - 1) / 2) * (fontSize * 1.1);
+                ctx.fillText(w, 0, yOffset + fontSize/3);
+            });
+        } else {
+            // 单个长单词，如果太长则缩小字体
+            let fontSize = this.radius * 0.35;
+            if (text.length > 8) fontSize = this.radius * 0.28;
+            ctx.font = `bold ${fontSize}px Arial`;
+            ctx.fillText(text, 0, fontSize * 0.3);
+        }
+        ctx.restore();
+    }
+}
+
+// 其余逻辑（handleInput, startGame等）保持不变
+function handleInput(e) {
+    if (!gameActive || isPaused || isManuallyPaused) return;
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    const rect = canvas.getBoundingClientRect();
+    const mouseX = clientX - rect.left, mouseY = clientY - rect.top;
+    let hitCorrect = false; let hitAnyFruit = false;
+    fruits.forEach(fruit => {
+        const dx = mouseX - fruit.x, dy = mouseY - fruit.y;
+        if (Math.sqrt(dx*dx + dy*dy) < fruit.radius) {
+            hitAnyFruit = true;
+            if (fruit.wordData.en === (currentTarget ? currentTarget.en : "")) {
+                hitCorrect = true; processCorrectHit(fruit); fruit.init();
+            }
+        }
+    });
+    if (hitAnyFruit && !hitCorrect) processWrongHit();
+}
+
+function processCorrectHit(fruit) {
+    for (let i = 0; i < 20; i++) particles.push(new Particle(fruit.x, fruit.y, fruit.color));
+    errorStreak = 0; errorTipEl.style.display = 'none';
+    if (scoreSuspended) { scoreSuspended = false; comboCount = 0; } 
+    else { comboCount++; score += Math.min(comboCount, 4); 
+        if(comboCount >= 2) { comboToastEl.textContent = `棒！${comboCount}连击！`; comboToastEl.style.display = 'block'; setTimeout(() => { comboToastEl.style.display = 'none'; }, 800); }
+    }
+    scoreEl.textContent = score;
+    if (gameMode === 'review') startReviewSession();
+    else speak(currentTarget.en, () => { if(gameActive) pickNewTarget(); });
+}
+
+function processWrongHit() { comboCount = 0; errorStreak++; if (errorStreak === 2) errorTipEl.style.display = 'block'; else if (errorStreak >= 3) scoreSuspended = true; }
+
+function startReviewSession() {
+    isPaused = true;
+    document.getElementById('review-overlay').style.display = 'block';
+    document.getElementById('review-word-en').textContent = currentTarget.en.toLowerCase();
+    document.getElementById('review-word-cn').textContent = currentTarget.cn;
+    speak(currentTarget.en, () => {
+        reviewTimeout = setTimeout(() => {
+            speak(currentTarget.en, () => {
+                reviewTimeout = setTimeout(() => { closeReviewManually(); }, 800);
+            });
+        }, 600);
+    });
+}
+
+window.closeReviewManually = function() {
+    window.speechSynthesis.cancel();
+    if(reviewTimeout) clearTimeout(reviewTimeout);
+    document.getElementById('review-overlay').style.display = 'none';
+    isPaused = false;
+    if(gameActive) pickNewTarget();
+};
+
+function pickNewTarget() {
+    if (!gameActive || isPaused || isManuallyPaused) return;
+    const randomIndex = Math.floor(Math.random() * fruits.length);
+    currentTarget = fruits[randomIndex].wordData;
+    targetWordEl.textContent = currentTarget.en.toLowerCase();
+    targetCnEl.textContent = currentTarget.cn;
+    speak(currentTarget.en);
+}
+
+window.togglePause = function() {
+    if (!gameActive || isPaused) return;
+    isManuallyPaused = !isManuallyPaused;
+    const btn = document.getElementById('pause-btn');
+    if (isManuallyPaused) { btn.textContent = "继续"; btn.classList.add('paused'); window.speechSynthesis.cancel(); } 
+    else { btn.textContent = "暂停"; btn.classList.remove('paused'); if(currentTarget) speak(currentTarget.en); }
+};
+
+window.startGame = function(mode) {
+    gameMode = mode; score = 0; timeLeft = 60; fruits = []; particles = []; comboCount = 0; errorStreak = 0; scoreSuspended = false;
+    scoreEl.textContent = "0"; timerEl.textContent = "60";
+    document.getElementById('start-screen').style.display = 'none';
+    document.getElementById('game-over').style.display = 'none';
+    gameActive = true;
+    for (let i = 0; i < 4; i++) { setTimeout(() => { if (gameActive) { fruits.push(new Fruit()); if (fruits.length === 1) pickNewTarget(); } }, i * 600); }
+    if(gameCountdownInterval) clearInterval(gameCountdownInterval);
+    gameCountdownInterval = setInterval(() => { if (gameActive && !isPaused && !isManuallyPaused) { timeLeft--; timerEl.textContent = timeLeft; if (timeLeft <= 0) endGame(); } }, 1000);
+    if(voiceLoopInterval) clearInterval(voiceLoopInterval);
+    voiceLoopInterval = setInterval(() => { if (gameActive && !isPaused && !isManuallyPaused && currentTarget) speak(currentTarget.en); }, 4500);
+    animate();
+};
+
+function endGame() { gameActive = false; window.speechSynthesis.cancel(); clearInterval(gameCountdownInterval); clearInterval(voiceLoopInterval); let highScore = localStorage.getItem('fruitGameHighScore') || 0; if (score > highScore) { highScore = score; localStorage.setItem('fruitGameHighScore', score); } document.getElementById('game-over').style.display = 'flex'; document.getElementById('final-score').textContent = score; document.getElementById('high-score').textContent = highScore; }
+
+class Particle {
+    constructor(x, y, color) { this.x = x; this.y = y; this.color = color; this.size = Math.random() * 5 + 2; this.speedX = (Math.random() - 0.5) * 15; this.speedY = (Math.random() - 0.5) * 15; this.gravity = 0.2; this.life = 1.0; this.decay = Math.random() * 0.03 + 0.02; }
+    update() { if(!isPaused && !isManuallyPaused) { this.x += this.speedX; this.y += this.speedY; this.speedY += this.gravity; this.life -= this.decay; } }
+    draw() { ctx.fillStyle = this.color; ctx.globalAlpha = this.life; ctx.beginPath(); ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = 1.0; }
+}
+
+canvas.addEventListener('mousedown', handleInput);
+canvas.addEventListener('touchstart', (e) => { e.preventDefault(); handleInput(e); }, { passive: false });
+
+function animate() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    if (gameActive && fruits.length > 0 && !isPaused && !isManuallyPaused && currentTarget) { if (!fruits.some(f => f.wordData.en === currentTarget.en)) pickNewTarget(); }
+    fruits.forEach(f => { f.update(); f.draw(); });
+    for (let i = particles.length - 1; i >= 0; i--) { particles[i].update(); particles[i].draw(); if (particles[i].life <= 0) particles.splice(i, 1); }
+    if (gameActive) requestAnimationFrame(animate);
+}
+
+window.showRules = function() { document.getElementById('rule-screen').style.display = 'flex'; };
+window.hideRules = function() { document.getElementById('rule-screen').style.display = 'none'; };
+</script>
+</body>
+</html>
