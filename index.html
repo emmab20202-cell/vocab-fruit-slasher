@@ -2,42 +2,118 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>词汇水果消消乐 - 终极优化版</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>词汇水果派对 - 教学增强版</title>
     <style>
-        body { margin: 0; padding: 0; background-color: #2c3e50; overflow: hidden; color: white; font-family: 'PingFang SC', sans-serif; user-select: none; touch-action: none; }
+        body { margin: 0; padding: 0; background-color: #2c3e50; overflow: hidden; color: white; font-family: 'PingFang SC', sans-serif; user-select: none; touch-action: none; -webkit-tap-highlight-color: transparent; }
         #gameCanvas { display: block; background: radial-gradient(circle, #34495e 0%, #2c3e50 100%); cursor: pointer; }
-        #ui-layer { position: absolute; top: 0; left: 0; width: 100%; padding: 20px; box-sizing: border-box; pointer-events: none; display: flex; justify-content: space-between; z-index: 10; }
-        #target-box { background: rgba(0,0,0,0.8); padding: 15px 25px; border-radius: 12px; border-left: 10px solid #ff9f43; min-width: 280px; }
-        #target-word { color: #ff9f43; font-size: 56px; font-weight: bold; display: block; text-shadow: 2px 2px 5px rgba(0,0,0,0.5); }
-        #info-box { text-align: right; background: rgba(0,0,0,0.6); padding: 15px 25px; border-radius: 12px; font-size: 24px; }
-        .overlay { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; color: #333; padding: 40px; border-radius: 20px; text-align: center; box-shadow: 0 20px 50px rgba(0,0,0,0.5); z-index: 100; width: 85%; max-width: 350px; }
-        button { background: #2ed573; color: white; border: none; padding: 18px 45px; border-radius: 12px; cursor: pointer; font-size: 24px; font-weight: bold; margin-top: 20px; box-shadow: 0 6px 0 #218838; -webkit-tap-highlight-color: transparent; }
-        button:active { transform: translateY(3px); box-shadow: none; }
+        
+        /* 核心修复：确保UI容器不会遮挡Canvas，但子元素可以点击 */
+        #main-container { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; flex-direction: column; z-index: 10; pointer-events: none; }
+        
+        #header { width: 100%; padding: 10px; box-sizing: border-box; display: flex; justify-content: space-between; align-items: flex-start; }
+        
+        #target-box { background: rgba(0,0,0,0.8); padding: 10px 15px; border-radius: 10px; border-left: 6px solid #ff9f43; min-width: 120px; max-width: 45%; pointer-events: auto; }
+        #target-word { color: #ff9f43; font-size: 32px; font-weight: bold; display: block; text-shadow: 2px 2px 5px rgba(0,0,0,0.5); word-wrap: break-word; }
+        
+        #sidebar { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); display: flex; flex-direction: column; gap: 10px; text-align: right; pointer-events: auto; }
+        
+        #info-box { background: rgba(0,0,0,0.6); padding: 10px 15px; border-radius: 10px; font-size: 16px; min-width: 80px; margin-bottom: 20px;}
+
+        .sidebar-btn { background: rgba(255,255,255,0.2); border: 2px solid rgba(255,255,255,0.4); color: white; border-radius: 8px; padding: 8px 12px; font-size: 14px; cursor: pointer; transition: background 0.2s; }
+        .sidebar-btn:active { background: rgba(255,255,255,0.4); }
+        .sidebar-btn.paused { background: #f1c40f; border-color: #f39c12; color: #333;}
+
+        @media (min-width: 768px) {
+            #header { padding: 20px; }
+            #target-box { padding: 15px 25px; border-left-width: 10px; min-width: 280px; }
+            #target-word { font-size: 56px; }
+            #info-box { font-size: 24px; padding: 15px 25px; }
+            #sidebar { right: 20px; }
+            .sidebar-btn { padding: 12px 20px; font-size: 18px; }
+        }
+
+        @media (orientation: landscape) and (max-width: 767px) {
+            #target-box { max-width: 70%; }
+            #target-word { font-size: 24px; }
+            #sidebar { flex-direction: row; top: auto; bottom: 10px; right: 10px; transform: none; align-items: flex-end; }
+            #info-box { margin-bottom: 0; margin-right: 15px;}
+        }
+
+        #review-overlay { 
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.7); display: none; z-index: 200; pointer-events: auto;
+        }
+        #review-card {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            background: rgba(255, 255, 255, 0.98); color: #333; 
+            padding: 20px 30px; border-radius: 20px; text-align: center;
+            box-shadow: 0 0 50px rgba(0,0,0,0.6);
+            border: 6px solid #ff9f43; width: 80%; max-width: 450px;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+        }
+        #review-word-en { font-size: 56px; font-weight: bold; color: #e67e22; margin: 5px 0; text-transform: lowercase; word-wrap: break-word;}
+        #review-word-cn { font-size: 24px; font-weight: normal; color: #7f8c8d; border-top: 2px solid #eee; padding-top: 10px; width: 100%;}
+        
+        @media (min-width: 768px) {
+            #review-word-en { font-size: 80px; }
+            #review-word-cn { font-size: 36px; }
+        }
+
+        .full-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 100; display: flex; flex-direction: column; align-items: center; justify-content: center; pointer-events: auto;}
+        .overlay-card { background: white; color: #333; padding: 30px; border-radius: 20px; text-align: center; width: 85%; max-width: 400px; box-shadow: 0 20px 50px rgba(0,0,0,0.5);}
+        .mode-btns { display: flex; gap: 15px; justify-content: center; flex-wrap: wrap; margin-top: 25px; }
+        
+        .game-btn { background: #2ed573; color: white; border: none; padding: 15px 25px; border-radius: 12px; cursor: pointer; font-size: 18px; font-weight: bold; box-shadow: 0 5px 0 #218838; }
+        .game-btn.review-btn { background: #ff9f43; box-shadow: 0 5px 0 #d35400; }
+        .game-btn:active { transform: translateY(3px); box-shadow: none; }
     </style>
 </head>
 <body>
 
-    <div id="start-screen" class="overlay">
-        <h1>词汇水果派对</h1>
-        <p>听音识词，点击水果！<br><b>提示：若无声音请点击页面空白处后再点击开始</b></p>
-        <button id="start-btn">开始游戏</button>
-    </div>
-
-    <div id="game-over" class="overlay" style="display:none">
-        <h1>Time's Up! 时间到!</h1>
-        <p>Final Score 最终得分: <span id="final-score">0</span></p>
-        <button onclick="location.reload()">Play Again 再挑战一次</button>
-    </div>
-
-    <div id="ui-layer">
-        <div id="target-box">
-            <span style="font-size: 18px; opacity: 0.9;">当前目标:</span>
-            <span id="target-word">加载中...</span>
+    <div id="start-screen" class="full-overlay">
+        <div class="overlay-card">
+            <h2>词汇水果派对</h2>
+            <p>请选择游戏模式</p>
+            <div class="mode-btns">
+                <button class="game-btn" onclick="startGame('free')">畅玩模式</button>
+                <button class="game-btn review-btn" onclick="startGame('review')">复习模式</button>
+            </div>
         </div>
-        <div id="info-box">
-            <div>倒计时: <span id="timer">60</span>s</div>
-            <div style="color: #2ed573;">得分: <span id="score">0</span></div>
+    </div>
+
+    <div id="review-overlay">
+        <div id="review-card">
+            <span style="font-size: 18px; color: #bdc3c7;">跟我读 (Repeat after me)</span>
+            <span id="review-word-en">word</span>
+            <span id="review-word-cn">中文意思</span>
+            <div style="font-size: 20px; margin-top: 10px;">🔊...</div>
+        </div>
+    </div>
+
+    <div id="game-over" class="full-overlay" style="display:none">
+        <div class="overlay-card">
+            <h2>Time's up 时间到!</h2>
+            <p>Final Score 得分: <span id="final-score" style="font-size: 32px; color: #2ed573; font-weight: bold;">0</span></p>
+            <button class="game-btn" onclick="location.reload()">Play again 再挑战一次</button>
+        </div>
+    </div>
+
+    <div id="main-container">
+        <div id="header">
+            <div id="target-box">
+                <span style="font-size: 14px; opacity: 0.8;">Target:</span>
+                <span id="target-word">Loding...</span>
+            </div>
+        </div>
+        
+        <div id="sidebar">
+            <div id="info-box">
+                <div>⏱️ <span id="timer">60</span>s</div>
+                <div style="color: #2ed573;">🏆 <span id="score">0</span></div>
+            </div>
+            <button id="pause-btn" class="sidebar-btn" onclick="togglePause()">暂停游戏</button>
+            <button id="quit-btn" class="sidebar-btn" onclick="quitGame()">退出游戏</button>
         </div>
     </div>
 
@@ -48,109 +124,187 @@ const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 const targetWordEl = document.getElementById('target-word');
 const timerEl = document.getElementById('timer');
+const pauseBtn = document.getElementById('pause-btn');
 
-canvas.width = window.innerWidth;
-canvas.height = window.innerHeight;
+// 修复点 1：修正词库中的全角逗号 “，”
+const vocabularyData = [
+    {en: "square", cn: "正方形"},
+    {en: "triangle", cn: "三角形"},
+    {en: "rectangle", cn: "长方形"},
+    {en: "circle", cn: "圆形"},
+    {en: "their", cn: "他们的"},
+    {en: "favourite", cn: "最喜爱的"},
+    {en: "present", cn: "礼物；现在的"},
+    {en: "plane", cn: "飞机"},
+    {en: "robot", cn: "机器人"},
+    {en: "bike", cn: "自行车"},
+    {en: "balloon", cn: "气球"},
+    {en: "radio", cn: "收音机"},
+    {en: "helicopter", cn: "直升机"},
+    {en: "milk", cn: "牛奶"},
+    {en: "coffee", cn: "咖啡"},
+    {en: "whose", cn: "谁的"},
+    {en: "kite", cn: "风筝"},
+    {en: "mouse", cn: "老鼠；鼠标"},
+    {en: "keyboard", cn: "键盘"},
+    {en: "purple", cn: "紫色"},
+    {en: "yellow", cn: "黄色"},
+    {en: "swing", cn: "秋千"},
+    {en: "seesaw", cn: "跷跷板"},
+    {en: "slide", cn: "滑板"},
+    {en: "brown", cn: "棕色"},
+    {en: "orange", cn: "橙色"},
+    {en: "grey", cn: "灰色"}
+];
+
+function resizeCanvas() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+}
+window.addEventListener('resize', resizeCanvas);
+resizeCanvas();
 
 let score = 0;
 let timeLeft = 60;
 let gameActive = false;
-let vocabulary = ["square", "triangle", "rectangle", "circle", "their", "favourite", "present", "plane", "robot", "bike", "balloon", "radio", "helicopter", "milk", "coffee", "whose", "kite", "mouse", "keyboard", "blue"];
-let currentTargetWord = "";
+let isPaused = false; 
+let isManuallyPaused = false; 
+let gameMode = 'free'; 
+let currentTarget = null; 
 let fruits = [];
 let particles = [];
-let targetChangeTimer;
+let gameCountdownInterval;
+let voiceLoopInterval;
 
-// --- 语音核心：强制激活与错误修复 ---
-function speak(text) {
-    if (!gameActive || !text) return;
+function speak(text, callback) {
+    if (!gameActive || isManuallyPaused) return; 
     window.speechSynthesis.cancel();
-
-    setTimeout(() => {
-        const utterance = new SpeechSynthesisUtterance(text);
-        utterance.lang = 'en-US';
-        utterance.rate = 0.8;
-        utterance.volume = 1.0;
-        utterance.onerror = (e) => {
-            if(e.error === 'interrupted') window.speechSynthesis.resume();
-        };
-        window.speechSynthesis.speak(utterance);
-    }, 50);
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = 'en-US';
+    utterance.rate = 0.8; 
+    if(callback) utterance.onend = callback;
+    window.speechSynthesis.speak(utterance);
 }
 
 class Particle {
     constructor(x, y, color) {
         this.x = x; this.y = y; this.color = color;
-        this.size = Math.random() * 8 + 4;
-        this.speedX = (Math.random() - 0.5) * 20;
-        this.speedY = (Math.random() - 0.5) * 20;
-        this.gravity = 0.25; this.life = 1.0; this.decay = Math.random() * 0.03 + 0.02;
+        this.size = Math.random() * 5 + 2;
+        this.speedX = (Math.random() - 0.5) * 15;
+        this.speedY = (Math.random() - 0.5) * 15;
+        this.gravity = 0.2; this.life = 1.0; this.decay = Math.random() * 0.03 + 0.02;
     }
-    update() { this.x += this.speedX; this.y += this.speedY; this.speedY += this.gravity; this.life -= this.decay; }
+    update() { if(!isPaused && !isManuallyPaused) { this.x += this.speedX; this.y += this.speedY; this.speedY += this.gravity; this.life -= this.decay; } }
     draw() { ctx.fillStyle = this.color; ctx.globalAlpha = this.life; ctx.beginPath(); ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = 1.0; }
 }
 
 class Fruit {
     constructor() { this.init(); }
     init() {
-        let newWord;
-        do {
-            newWord = vocabulary[Math.floor(Math.random() * vocabulary.length)].trim().toLowerCase();
-        } while (fruits.some(f => f.word === newWord));
-
-        this.word = newWord;
-        this.radius = 80; 
-        this.x = Math.random() * (canvas.width - 250) + 125;
+        let newData;
+        do { newData = vocabularyData[Math.floor(Math.random() * vocabularyData.length)]; } 
+        while (fruits.some(f => f.wordData.en === newData.en));
+        this.wordData = newData;
+        this.radius = Math.min(canvas.width, canvas.height) * 0.12; 
+        if(this.radius > 80) this.radius = 80;
+        this.x = Math.random() * (canvas.width - this.radius * 2) + this.radius;
         this.y = canvas.height + 150;
         this.speedX = (Math.random() - 0.5) * 2;
-        this.speedY = -(Math.random() * 5 + 10); // 确保飞升高度到80%
+        this.speedY = -(Math.random() * 4 + 11); 
         this.gravity = 0.15; 
-        this.color = `hsl(${Math.random() * 360}, 85%, 60%)`;
+        this.color = `hsl(${Math.random() * 360}, 80%, 60%)`;
     }
     update() {
-        if (!gameActive) return;
+        if (!gameActive || isPaused || isManuallyPaused) return;
         this.speedY += this.gravity;
         this.x += this.speedX;
         this.y += this.speedY;
-        if (this.y > canvas.height + 200) this.init();
+        if (this.y > canvas.height + 150) this.init();
     }
     draw() {
         ctx.save();
         ctx.translate(this.x, this.y);
         ctx.beginPath(); ctx.arc(0, 0, this.radius, 0, Math.PI * 2);
         ctx.fillStyle = this.color; ctx.fill();
-        ctx.lineWidth = 6; ctx.strokeStyle = 'white'; ctx.stroke();
+        ctx.lineWidth = 4; ctx.strokeStyle = 'white'; ctx.stroke();
         ctx.fillStyle = "white"; 
-        ctx.font = "bold 34px Arial"; 
+        ctx.font = `bold ${this.radius * 0.35}px Arial`; 
         ctx.textAlign = "center";
-        ctx.fillText(this.word, 0, 12);
+        ctx.fillText(this.wordData.en.toLowerCase(), 0, this.radius * 0.12);
         ctx.restore();
     }
 }
 
-function pickNewTarget() {
-    if (fruits.length === 0 || !gameActive) return;
-    const randomIndex = Math.floor(Math.random() * fruits.length);
-    currentTargetWord = fruits[randomIndex].word;
-    targetWordEl.textContent = currentTargetWord;
-    speak(currentTargetWord);
-    
-    clearTimeout(targetChangeTimer);
-    targetChangeTimer = setTimeout(pickNewTarget, 6000);
+function quitGame() {
+    gameActive = false;
+    isPaused = false;
+    isManuallyPaused = false;
+    document.getElementById('start-screen').style.display = 'flex';
+    document.getElementById('review-overlay').style.display = 'none';
+    document.getElementById('game-over').style.display = 'none';
+    resetGameState();
 }
 
-// 输入处理逻辑 (兼容手机和电脑)
-const handleInput = (e) => {
+function togglePause() {
     if (!gameActive) return;
-    let clientX, clientY;
-    if (e.touches) {
-        clientX = e.touches[0].clientX;
-        clientY = e.touches[0].clientY;
-    } else {
-        clientX = e.clientX;
-        clientY = e.clientY;
-    }
+    if (isPaused) return; 
 
+    isManuallyPaused = !isManuallyPaused;
+    if (isManuallyPaused) {
+        pauseBtn.textContent = '继续游戏';
+        pauseBtn.classList.add('paused');
+        window.speechSynthesis.cancel();
+    } else {
+        pauseBtn.textContent = '暂停游戏';
+        pauseBtn.classList.remove('paused');
+        if(currentTarget) speak(currentTarget.en); 
+    }
+}
+
+function handleHit() {
+    score++;
+    document.getElementById('score').textContent = score;
+
+    if (gameMode === 'review') {
+        startReviewSession();
+    } else {
+        speak(currentTarget.en, () => {
+            if(gameActive) pickNewTarget();
+        });
+    }
+}
+
+function startReviewSession() {
+    isPaused = true;
+    document.getElementById('review-overlay').style.display = 'block';
+    document.getElementById('review-word-en').textContent = currentTarget.en.toLowerCase();
+    document.getElementById('review-word-cn').textContent = currentTarget.cn;
+
+    speak(currentTarget.en, () => {
+        setTimeout(() => {
+            speak(currentTarget.en, () => {
+                setTimeout(() => {
+                    document.getElementById('review-overlay').style.display = 'none';
+                    isPaused = false;
+                    pickNewTarget();
+                }, 600);
+            });
+        }, 600);
+    });
+}
+
+function pickNewTarget() {
+    if (fruits.length === 0 || !gameActive || isPaused || isManuallyPaused) return;
+    const randomIndex = Math.floor(Math.random() * fruits.length);
+    currentTarget = fruits[randomIndex].wordData;
+    targetWordEl.textContent = currentTarget.en.toLowerCase();
+    speak(currentTarget.en);
+}
+
+const handleInput = (e) => {
+    if (!gameActive || isPaused || isManuallyPaused) return;
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
     const rect = canvas.getBoundingClientRect();
     const mouseX = clientX - rect.left;
     const mouseY = clientY - rect.top;
@@ -159,81 +313,83 @@ const handleInput = (e) => {
         const dx = mouseX - fruit.x;
         const dy = mouseY - fruit.y;
         if (Math.sqrt(dx*dx + dy*dy) < fruit.radius) {
-            if (fruit.word === currentTargetWord) {
-                score++;
-                document.getElementById('score').textContent = score;
-                for (let i = 0; i < 25; i++) particles.push(new Particle(fruit.x, fruit.y, fruit.color));
+            if (fruit.wordData.en === currentTarget.en) {
+                for (let i = 0; i < 20; i++) particles.push(new Particle(fruit.x, fruit.y, fruit.color));
                 fruit.init(); 
-                pickNewTarget(); 
+                handleHit(); 
             }
         }
     });
 };
 
-function startGame() {
+function resetGameState() {
+    score = 0;
+    timeLeft = 60;
+    fruits = [];
+    particles = [];
+    isPaused = false;
+    isManuallyPaused = false;
+    pauseBtn.textContent = '暂停游戏';
+    pauseBtn.classList.remove('paused');
+    clearInterval(gameCountdownInterval);
+    clearInterval(voiceLoopInterval);
     window.speechSynthesis.cancel();
-    const unlock = new SpeechSynthesisUtterance("Welcome");
-    unlock.volume = 0; 
-    window.speechSynthesis.speak(unlock);
+}
 
+function startGame(mode) {
+    resetGameState();
+    gameMode = mode;
     document.getElementById('start-screen').style.display = 'none';
     gameActive = true;
-    
+
     for (let i = 0; i < 4; i++) {
-        setTimeout(() => {
-            if (gameActive) {
-                fruits.push(new Fruit());
+        setTimeout(() => { 
+            if (gameActive) { 
+                fruits.push(new Fruit()); 
                 if (fruits.length === 1) pickNewTarget(); 
-            }
-        }, i * 800);
+            } 
+        }, i * 600);
     }
 
-    const gameCountdown = setInterval(() => {
-        timeLeft--;
-        timerEl.textContent = timeLeft;
-        if (timeLeft <= 0) { clearInterval(gameCountdown); endGame(); }
+    gameCountdownInterval = setInterval(() => {
+        if (gameActive && !isPaused && !isManuallyPaused) {
+            timeLeft--;
+            timerEl.textContent = timeLeft;
+            if (timeLeft <= 0) endGame();
+        }
     }, 1000);
 
-    const voiceLoop = setInterval(() => {
-        if (gameActive) speak(currentTargetWord);
-        else clearInterval(voiceLoop);
-    }, 3000);
+    voiceLoopInterval = setInterval(() => {
+        if (gameActive && !isPaused && !isManuallyPaused && currentTarget) speak(currentTarget.en);
+    }, 4500);
 
     animate();
 }
 
 function endGame() {
     gameActive = false;
-    clearTimeout(targetChangeTimer);
+    isPaused = false;
+    isManuallyPaused = false;
     window.speechSynthesis.cancel();
-    document.getElementById('game-over').style.display = 'block';
+    document.getElementById('game-over').style.display = 'flex';
     document.getElementById('final-score').textContent = score;
 }
 
-document.getElementById('start-btn').onclick = startGame;
 canvas.addEventListener('mousedown', handleInput);
-canvas.addEventListener('touchstart', (e) => {
-    e.preventDefault();
-    handleInput(e);
-}, { passive: false });
+canvas.addEventListener('touchstart', (e) => { e.preventDefault(); handleInput(e); }, { passive: false });
 
 function animate() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    if (gameActive && fruits.length > 0) {
-        if (!fruits.some(f => f.word === currentTargetWord)) pickNewTarget();
+    if (gameActive && fruits.length > 0 && !isPaused && !isManuallyPaused && currentTarget) {
+        if (!fruits.some(f => f.wordData.en === currentTarget.en)) pickNewTarget();
     }
     fruits.forEach(f => { f.update(); f.draw(); });
     for (let i = particles.length - 1; i >= 0; i--) {
         particles[i].update(); particles[i].draw();
         if (particles[i].life <= 0) particles.splice(i, 1);
     }
-    requestAnimationFrame(animate);
+    if (gameActive) requestAnimationFrame(animate);
 }
-
-window.addEventListener('resize', () => {
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
-});
 </script>
 </body>
 </html>
